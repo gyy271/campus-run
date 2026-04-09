@@ -43,36 +43,41 @@
     </div>
     <div class="form-panel">
         <div class="form-title">📝 填写订单</div>
-        <div class="input-group"><label>👤 姓名</label><input type="text" id="userName" placeholder="例: 张三"></div>
-        <div class="input-group"><label>📞 电话</label><input type="tel" id="userPhone" placeholder="长号/短号"></div>
-        <div class="input-group"><label>🏠 宿舍</label><input type="text" id="dorm" placeholder="例: 7栋203室"></div>
         
-        <!-- 新增：配送时间选择器 -->
-        <div class="input-group">
-            <label>⏰ 期望配送时间</label>
-            <input type="datetime-local" id="deliveryTime" step="900"> <!-- step=900 表示15分钟一选 -->
-            <div class="delivery-note">⚠️ 只能选择当前时间之后的时间，跑腿员会按顺序安排</div>
-        </div>
-
-        <div id="dynamicFieldsContainer" class="dynamic-fields"></div>
-        <div id="customPriceArea" style="display:none;" class="price-slider-area">
-            <span>💰 自定义价格 (1~5元)</span>
-            <input type="range" id="customPriceSlider" min="1" max="5" step="0.5" value="2.5">
-            <div><span>¥1</span><span id="priceValueShow">¥2.5</span><span>¥5</span></div>
-        </div>
-        <div class="total-price" id="totalPreview">💰 总计: ¥1.50</div>
-        <button class="submit-btn" id="submitOrderBtn">✅ 立即下单</button>
+        <!-- 注意：这里使用 Netlify Forms，必须添加 netlify 属性 -->
+        <form name="campus-order" method="POST" data-netlify="true" netlify-honeypot="bot-field">
+            <input type="hidden" name="form-name" value="campus-order">
+            
+            <div class="input-group"><label>👤 姓名</label><input type="text" name="userName" placeholder="例: 张三" required></div>
+            <div class="input-group"><label>📞 电话</label><input type="tel" name="userPhone" placeholder="长号/短号" required></div>
+            <div class="input-group"><label>🏠 宿舍</label><input type="text" name="dorm" placeholder="例: 7栋203室" required></div>
+            <div class="input-group"><label>⏰ 期望配送时间</label><input type="datetime-local" name="deliveryTime" id="deliveryTime" step="900" required></div>
+            <div class="delivery-note">⚠️ 只能选择当前时间之后的时间</div>
+            
+            <!-- 服务类型（隐藏，由 JavaScript 动态设置） -->
+            <input type="hidden" name="serviceType" id="serviceTypeInput" value="快递帮取">
+            <input type="hidden" name="servicePrice" id="servicePriceInput" value="1.5">
+            
+            <div id="dynamicFieldsContainer" class="dynamic-fields"></div>
+            <div id="customPriceArea" style="display:none;" class="price-slider-area">
+                <span>💰 自定义价格 (1~5元)</span>
+                <input type="range" id="customPriceSlider" min="1" max="5" step="0.5" value="2.5">
+                <div><span>¥1</span><span id="priceValueShow">¥2.5</span><span>¥5</span></div>
+            </div>
+            <div class="total-price" id="totalPreview">💰 总计: ¥1.50</div>
+            <button type="submit" class="submit-btn">✅ 立即下单</button>
+        </form>
     </div>
     <div class="order-section">
         <h3>📋 我的订单</h3>
-        <div id="orderListContainer" class="order-list"><div class="empty-msg">暂无订单</div></div>
+        <div id="orderListContainer" class="order-list"><div class="empty-msg">暂无订单（仅展示本地记录）</div></div>
     </div>
     <div class="qrcode-area"><p>📱 微信/浏览器扫一扫</p><div id="qrcode"></div><p>分享二维码给好友</p></div>
 </div>
 <div id="toastMsg" class="toast-msg"></div>
 
 <script>
-    // ---------- 服务切换与动态表单 ----------
+    // 服务切换与动态表单（同上，需同时更新隐藏字段）
     let currentService = "express";
     let currentFixedPrice = 1.5;
     let customPrice = 2.5;
@@ -86,13 +91,15 @@
     function renderDynamicFields() {
         let cfg = dynamicFieldsMap[currentService];
         let html = `<label>${cfg.label}</label>`;
-        if (cfg.type === 'textarea') html += `<textarea rows="2" id="dynamic_input" placeholder="${cfg.placeholder}"></textarea>`;
-        else html += `<input type="text" id="dynamic_input" placeholder="${cfg.placeholder}">`;
+        if (cfg.type === 'textarea') html += `<textarea name="serviceDetail" rows="2" id="dynamic_input" placeholder="${cfg.placeholder}" required></textarea>`;
+        else html += `<input type="text" name="serviceDetail" id="dynamic_input" placeholder="${cfg.placeholder}" required>`;
         document.getElementById('dynamicFieldsContainer').innerHTML = html;
     }
     function updateTotalPreview() {
         let price = currentService === 'other' ? customPrice : currentFixedPrice;
         document.getElementById('totalPreview').innerHTML = `💰 总计: ¥${price.toFixed(2)}`;
+        // 更新隐藏价格字段
+        document.getElementById('servicePriceInput').value = price;
     }
     function switchService(service, price) {
         currentService = service;
@@ -100,9 +107,15 @@
             document.getElementById('customPriceArea').style.display = 'block';
             customPrice = parseFloat(document.getElementById('customPriceSlider').value);
             document.getElementById('priceValueShow').innerText = `¥${customPrice.toFixed(2)}`;
+            document.getElementById('serviceTypeInput').value = '其他代跑';
         } else {
             document.getElementById('customPriceArea').style.display = 'none';
             currentFixedPrice = price;
+            let serviceName = '';
+            if (service === 'express') serviceName = '快递帮取';
+            else if (service === 'food') serviceName = '外卖到寝';
+            else serviceName = '超市代购';
+            document.getElementById('serviceTypeInput').value = serviceName;
         }
         document.querySelectorAll('.service-card').forEach(card => {
             if (card.getAttribute('data-service') === service) card.classList.add('active');
@@ -125,13 +138,11 @@
     });
     switchService('express', 1.5);
 
-    // ---------- 配送时间限制（只能选未来时间）----------
+    // 配送时间限制（只能选未来时间）
     const deliveryTimeInput = document.getElementById('deliveryTime');
     function setMinDeliveryTime() {
         const now = new Date();
-        // 设置最小时间为当前时间 + 30分钟（给骑手准备时间，可调整）
         const minTime = new Date(now.getTime() + 30 * 60000);
-        // 转换为 datetime-local 需要的格式: YYYY-MM-DDThh:mm
         const year = minTime.getFullYear();
         const month = String(minTime.getMonth() + 1).padStart(2, '0');
         const day = String(minTime.getDate()).padStart(2, '0');
@@ -139,34 +150,25 @@
         const minutes = String(minTime.getMinutes()).padStart(2, '0');
         const minDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
         deliveryTimeInput.min = minDateTime;
-        // 如果当前选中的时间小于最小时间，自动设置为最小时间
-        if (deliveryTimeInput.value && deliveryTimeInput.value < minDateTime) {
-            deliveryTimeInput.value = minDateTime;
-        }
-        // 如果没有默认值，设置一个默认（当前时间+30分钟）
-        if (!deliveryTimeInput.value) {
+        if (!deliveryTimeInput.value || deliveryTimeInput.value < minDateTime) {
             deliveryTimeInput.value = minDateTime;
         }
     }
-    // 页面加载时设置一次，并且每60秒刷新一次（防止用户停留太久导致可选过去时间）
     setMinDeliveryTime();
     setInterval(setMinDeliveryTime, 60000);
-
-    // 手动输入时校验（防止手动修改成过去时间）
     deliveryTimeInput.addEventListener('change', function() {
         const now = new Date();
-        const selected = new Date(this.value);
-        if (selected < now) {
-            showToast('❌ 不能选择过去的时间，已自动调整为当前时间+30分钟');
+        if (new Date(this.value) < now) {
+            showToast('❌ 不能选择过去的时间，已自动调整');
             setMinDeliveryTime();
         }
     });
 
-    // ---------- 本地订单存储（离线备份）----------
+    // 本地订单存储（仅作备份展示）
     let orders = JSON.parse(localStorage.getItem('campus_orders') || '[]');
     function renderOrders() {
         let container = document.getElementById('orderListContainer');
-        if (orders.length === 0) { container.innerHTML = '<div class="empty-msg">暂无订单</div>'; return; }
+        if (orders.length === 0) { container.innerHTML = '<div class="empty-msg">暂无订单（仅展示本地记录）</div>'; return; }
         let html = '';
         orders.forEach((o, idx) => {
             let deliveryInfo = o.deliveryTime ? `⏰ 期望送达: ${new Date(o.deliveryTime).toLocaleString()}<br>` : '';
@@ -177,66 +179,52 @@
     window.deleteOrder = function(idx) { orders.splice(idx,1); localStorage.setItem('campus_orders',JSON.stringify(orders)); renderOrders(); };
     function saveOrderLocally(order) { orders.unshift(order); localStorage.setItem('campus_orders',JSON.stringify(orders)); renderOrders(); }
 
-    // ---------- 提交订单 ----------
-    document.getElementById('submitOrderBtn').addEventListener('click', async () => {
-        let userName = document.getElementById('userName').value.trim();
-        let userPhone = document.getElementById('userPhone').value.trim();
-        let dorm = document.getElementById('dorm').value.trim();
-        let deliveryTime = deliveryTimeInput.value;
-        if (!userName || !userPhone || !dorm) { showToast('请填写完整信息'); return; }
-        if (!deliveryTime) { showToast('请选择配送时间'); return; }
-        // 再次校验配送时间是否有效（不能过去）
-        const now = new Date();
-        const selectedTime = new Date(deliveryTime);
-        if (selectedTime < now) {
-            showToast('❌ 配送时间不能是过去的时间，请重新选择');
+    // 拦截表单提交，同时保存到本地（Forms 会异步提交，这里额外做本地存储）
+    const form = document.querySelector('form');
+    form.addEventListener('submit', function(e) {
+        // 获取表单数据
+        const userName = document.querySelector('[name="userName"]').value;
+        const userPhone = document.querySelector('[name="userPhone"]').value;
+        const dorm = document.querySelector('[name="dorm"]').value;
+        const deliveryTime = document.querySelector('[name="deliveryTime"]').value;
+        const serviceType = document.querySelector('[name="serviceType"]').value;
+        const servicePrice = parseFloat(document.querySelector('[name="servicePrice"]').value);
+        const serviceDetail = document.querySelector('[name="serviceDetail"]')?.value || '';
+        
+        if (!userName || !userPhone || !dorm || !deliveryTime || !serviceDetail) {
+            e.preventDefault();
+            showToast('请填写完整信息');
+            return;
+        }
+        // 校验时间
+        if (new Date(deliveryTime) < new Date()) {
+            e.preventDefault();
+            showToast('❌ 配送时间不能是过去的时间');
             setMinDeliveryTime();
             return;
         }
-        let dynamicVal = document.getElementById('dynamic_input')?.value.trim() || '';
-        if (!dynamicVal) { showToast('请填写服务详细信息'); return; }
-        let serviceName = '', totalPrice = 0;
-        if (currentService === 'express') { serviceName = '快递帮取'; totalPrice = 1.5; }
-        else if (currentService === 'food') { serviceName = '外卖到寝'; totalPrice = 1.0; }
-        else if (currentService === 'supermarket') { serviceName = '超市代购'; totalPrice = 1.0; }
-        else { serviceName = '其他代跑'; totalPrice = customPrice; }
-        let order = { 
-            serviceName, 
-            totalPrice, 
-            userName, 
-            userPhone, 
-            dorm, 
-            detail: dynamicVal, 
-            deliveryTime: deliveryTime,
-            timestamp: new Date().toISOString() 
+        // 保存到本地
+        const order = {
+            serviceName: serviceType,
+            totalPrice: servicePrice,
+            userName, userPhone, dorm,
+            deliveryTime,
+            detail: serviceDetail,
+            timestamp: new Date().toISOString()
         };
-        // 发送到 Netlify Function
-        try {
-            let res = await fetch('/.netlify/functions/submit-order', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(order)
-            });
-            if (res.ok) {
-                showToast('✅ 下单成功！跑腿员会按时间顺序安排');
-                saveOrderLocally(order);
-                // 清空表单（保留配送时间默认值）
-                document.getElementById('userName').value = '';
-                document.getElementById('userPhone').value = '';
-                document.getElementById('dorm').value = '';
-                document.getElementById('dynamic_input').value = '';
-                setMinDeliveryTime(); // 刷新配送时间默认值
-            } else {
-                showToast('⚠️ 服务器保存失败，但已保存在本地');
-                saveOrderLocally(order);
-            }
-        } catch(e) {
-            showToast('⚠️ 网络问题，订单已保存在本地');
-            saveOrderLocally(order);
-        }
+        saveOrderLocally(order);
+        // 不阻止表单提交，让 Netlify 也处理
+        setTimeout(() => {
+            showToast('✅ 订单已提交！');
+            // 清空部分字段（保留配送时间）
+            document.querySelector('[name="userName"]').value = '';
+            document.querySelector('[name="userPhone"]').value = '';
+            document.querySelector('[name="dorm"]').value = '';
+            document.querySelector('[name="serviceDetail"]').value = '';
+            setMinDeliveryTime();
+        }, 100);
     });
     renderOrders();
-    // 生成二维码（使用当前网址）
     new QRCode(document.getElementById('qrcode'), { text: window.location.href, width: 120, height: 120 });
 </script>
 </body>
