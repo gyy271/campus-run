@@ -1,0 +1,7 @@
+{
+  "name": "campus-run",
+  "version": "1.0.0",
+  "dependencies": {
+    "@netlify/blobs": "^2.0.0"
+  }
+}
